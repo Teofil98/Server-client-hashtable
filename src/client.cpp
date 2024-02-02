@@ -4,6 +4,7 @@
 #include <fcntl.h>
 #include <iostream>
 #include <semaphore.h>
+#include <unistd.h>
 #include "include/defines.h"
 
 class Client 
@@ -34,9 +35,9 @@ public:
 		shm_unlink(shm_name);
 	}
 
-	void write_message(int32 operation, int32 message) 
+	void write_message(OPERATION operation, int32 message) 
 	{
-		write_int32_to_buff(operation, &shm_ptr);
+		write_int32_to_buff(static_cast<int32>(operation), &shm_ptr);
 		write_int32_to_buff(message, &shm_ptr);
 		sem_post(sem);
 	}
@@ -56,6 +57,7 @@ private:
 		for(int i = 0; i < 4; i++) {
 			(*buff)[i] = conversion.bytes[i];
 		}
+		// TODO: Add a current position in shm and wrap around
 		(*buff) += 4;
 	}
 };
@@ -63,6 +65,54 @@ private:
 int main()
 {
 	Client client(SHM_NAME, SHM_SIZE, SEM_NAME);
-	client.write_message(123, 456);
-	client.write_message(static_cast<int32>(OPERATION::QUIT), 789);
+	client.write_message(OPERATION::PRINT, 0);
+	client.write_message(OPERATION::FIND, 3);
+	client.write_message(OPERATION::INSERT, 3);
+	sleep(1);
+	client.write_message(OPERATION::PRINT, 0);
+	client.write_message(OPERATION::FIND, 3);
+
+	client.write_message(OPERATION::INSERT, -3);
+	sleep(1);
+	client.write_message(OPERATION::PRINT, 0);
+
+	client.write_message(OPERATION::INSERT, -1);
+	sleep(1);
+	client.write_message(OPERATION::PRINT, 0);
+
+	client.write_message(OPERATION::INSERT, 4);
+	sleep(1);
+	client.write_message(OPERATION::PRINT, 0);
+
+	client.write_message(OPERATION::INSERT, 7);
+	sleep(1);
+	client.write_message(OPERATION::PRINT, 0);
+
+	client.write_message(OPERATION::INSERT, 9);
+	sleep(1);
+	client.write_message(OPERATION::PRINT, 0);
+
+	client.write_message(OPERATION::INSERT, -10);
+	sleep(1);
+	client.write_message(OPERATION::PRINT, 0);
+
+	client.write_message(OPERATION::INSERT, 411);
+	sleep(1);
+	client.write_message(OPERATION::PRINT, 0);
+
+	client.write_message(OPERATION::FIND, 4);
+	client.write_message(OPERATION::DELETE, 4);
+	sleep(1);
+	client.write_message(OPERATION::PRINT, 0);
+
+	client.write_message(OPERATION::DELETE, -3);
+	client.write_message(OPERATION::DELETE, -3);
+	sleep(1);
+	client.write_message(OPERATION::PRINT, 0);
+
+	client.write_message(OPERATION::DELETE, -10);
+	client.write_message(OPERATION::INSERT, 4);
+	sleep(1);
+	client.write_message(OPERATION::PRINT, 0);
+	client.write_message(OPERATION::QUIT, 0);
 }
