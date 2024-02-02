@@ -15,6 +15,7 @@ public:
 	{
 		// initialize empty list
 		head = new Node<T>;
+		head->next = nullptr;
 		end = head;
 	}
 	~LinkedList() 
@@ -60,6 +61,19 @@ public:
 			}
 			prev = current;
 		}
+	}
+
+	bool find(T value)
+	{
+		Node<T>* prev = head;
+		while(prev->next != nullptr) {
+			Node<T>* current = prev->next;
+			if(current->value == value) {
+				return true;
+			}
+			prev = current;
+		}
+		return false;
 	}
 
 	void print()
