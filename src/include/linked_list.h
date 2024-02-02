@@ -1,3 +1,5 @@
+#pragma once
+
 #include <iostream>
 
 template <typename T>
@@ -20,8 +22,6 @@ public:
 	}
 	~LinkedList() 
 	{ 
-		// TODO: Free list elements
-		
 		while(head != end) {
 			remove((head->next)->value);
 		}
@@ -42,9 +42,9 @@ public:
 	
 	void remove(T value)
 	{
-		if(head == end) { 
-			return;
-		}
+//		if(head == end) { 
+//			return;
+//		}
 
 		Node<T>* prev = head;
 		
