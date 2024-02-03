@@ -2,6 +2,7 @@
 #include <cstdlib>
 #include <exception>
 #include <mutex>
+#include <stdexcept>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -18,16 +19,18 @@ class Server
 {
 public:
 	Server(const char* mem_name, const int mem_size, const char* semaphore_name, 
-			const int htable_size, const int max_threads = std::thread::hardware_concurrency()) 
+			const int htable_size, const unsigned long max_threads = std::thread::hardware_concurrency()) 
 		: shm_size{mem_size}, shm_name{mem_name}, sem_name{semaphore_name},
 		  hashtable_size{htable_size}, hashtable(htable_size, Server::simple_hash),
 		  max_nb_threads{max_threads}, shm_index{0}
 	{
+		if(shm_size < MESSAGE_SIZE) {
+			throw std::invalid_argument("ERROR: Shared memory size is smaller than message size");
+		}
 		// open shared memory
 		shm_fd = shm_open(shm_name, O_CREAT | O_RDWR, 0666);
 		if(shm_fd == -1) {
-			// TODO: Find better exception type to throw
-			throw std::invalid_argument("ERROR: Could not create shared memory");
+			throw std::runtime_error("ERROR: Could not create shared memory");
 		}
 	
 		ftruncate(shm_fd, shm_size);	
@@ -36,31 +39,24 @@ public:
 		// create named semaphore
 		sem = sem_open(sem_name, O_CREAT, 0666, 0);
 		if(sem == SEM_FAILED) {
-			throw std::invalid_argument("ERROR: Could not create named semaphore");
+			throw std::runtime_error("ERROR: Could not create named semaphore");
 		}
 
 		threads.reserve(max_nb_threads);
 
-		// TODO: Probably don't want to keep rand here in the end
 		srand(1234);
-
-		std::cout << "Max hw threads: " << std::thread::hardware_concurrency() << std::endl;
 	}
 
 	~Server() 
 	{
 		sem_close(sem);
-		if(sem_unlink(sem_name) != 0) {
-			std::cout << "Semaphore not unlinked" << std::endl;
-		} else { std:: cout << "Semaphore successfully unlinked" << std::endl;}
-
-		// TODO: Use buffer_idx for accessing shm_ptr
 		munmap((void*)shm_ptr, shm_size);
 		shm_unlink(shm_name);
 	}
 
 	void run() 
 	{
+		std::cout << "Server waiting for client input." << std::endl;
 		int sem_val;
 		bool quit = false; 
 		bool do_print = false;
@@ -69,7 +65,6 @@ public:
 			sem_getvalue(sem, &sem_val); 
 			// Read messages and spawn threads
 			while(sem_val > 0 && threads.size() < max_nb_threads) {
-				std::cout << "Sem val: " << sem_val << std::endl;
 				auto [operation, value] = read_message();	
 				// let client know that a message has been read
 				// important for sitations where the buffer can hold a single message
@@ -111,7 +106,7 @@ private:
 	sem_t* sem;
 	const int hashtable_size;
 	HashTable<int32> hashtable;
-	const int max_nb_threads;
+	const unsigned long max_nb_threads;
 	std::vector<std::thread> threads;
 	int shm_index;
 	std::mutex thread_mtx;
@@ -155,6 +150,7 @@ private:
 		cv.notify_all();
 		}
 		
+		std::cout << "[Thread " << std::this_thread::get_id() << "] inserting " << value << std::endl;
 		rand_delay();
 		hashtable.insert(value);
 		hashtable.unlock_bucket_for_write(value);
@@ -171,6 +167,7 @@ private:
 		cv.notify_all();
 		}
 
+		std::cout << "[Thread " << std::this_thread::get_id() << "] removing " << value << std::endl;
 		rand_delay();
 		hashtable.remove(value);
 		hashtable.unlock_bucket_for_write(value);
@@ -190,8 +187,8 @@ private:
 		rand_delay();
 		bool result = hashtable.find(value);
 		hashtable.unlock_bucket_for_read(value);
-		if(result) std::cout << "Element: " << value << " found" << std::endl; 
-		else std::cout << "Element: " << value << " not found" << std::endl; 
+		if(result) std::cout << "[Thread " << std::this_thread::get_id() << "] Element " << value << " found" << std::endl; 
+		else  std::cout << "[Thread " << std::this_thread::get_id() << "] Element " << value << " not found" << std::endl;
 		std::cout << "[Thread " << std::this_thread::get_id() << "] finished" << std::endl;
 
 	}
@@ -199,7 +196,7 @@ private:
 	void rand_delay() 
 	{
 		int n = 0;
-		int limit = rand();
+		int limit = rand() % 1000000;
 		while(n++ < limit) {}
 
 	}
@@ -220,7 +217,7 @@ private:
 			}	
 			// wait for thread to grab read/write lock before continuing
 			// this ensures that the order of enqueued operations from the client
-			// is the same
+			// is maintained
 			{
 				std::unique_lock<std::mutex> lck(thread_mtx);
 				while(!thread_ready) {
@@ -231,12 +228,24 @@ private:
 	}
 };
 
-int main()
+int main(int argc, char* argv[])
 {
+	if(argc != 2) {
+		std::cout << "Please specify hashtable size as command line argument." << std::endl;
+		return 0;
+	}
+
+	int hash_size = atoi(argv[1]);
+	if(hash_size <= 0) {
+		std::cout << "Hashtable size not valid." << std::endl;
+		return 0;
+	}
+
 	try {
-	Server server(SHM_NAME, SHM_SIZE, SEM_NAME, 7, 8);
+	Server server(SHM_NAME, SHM_SIZE, SEM_NAME, hash_size, MAX_NUM_THREADS);
 	server.run();
 	} catch (std::exception& e) {
 		std::cout << "Exception encountered: " << e.what() << std::endl;
 	}
+	return 0;
 }

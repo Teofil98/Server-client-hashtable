@@ -15,6 +15,7 @@ public:
 		m_buckets = new LinkedList<T>[m_size]; 
 		m_bucket_locks = new std::shared_mutex[m_size];
 	};
+
 	~HashTable()
 	{
 		delete[] m_buckets;
