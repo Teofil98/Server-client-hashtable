@@ -10,4 +10,4 @@ client: src/client.cpp src/include/
 	$(CXX) $(CXXFLAGS) src/client.cpp -o client 
 
 clean:
-	rm server client 
+	rm server client
