@@ -1,4 +1,4 @@
-# Hashtable Opertaions using a Client-Server Architecture
+# Hashtable Operations using a Client-Server Architecture
 
 This program creates 2 processes:
 * Server process: Processes hash table requests from the client and updates the hashtable accordingly.
