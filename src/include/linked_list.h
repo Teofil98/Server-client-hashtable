@@ -1,6 +1,7 @@
 #pragma once
 
 #include <iostream>
+#include <shared_mutex>
 
 template <typename T>
 struct Node
@@ -31,6 +32,7 @@ public:
 
 	void add (T value) 
 	{
+		rw_lock.lock();
 		Node<T>* node = new Node<T>;
 		node->value = value;
 		node->next = nullptr;
@@ -38,14 +40,12 @@ public:
 		// add after end
 		end->next = node;
 		end = node;
+		rw_lock.unlock();
 	}
 	
 	void remove(T value)
 	{
-//		if(head == end) { 
-//			return;
-//		}
-
+		rw_lock.lock();
 		Node<T>* prev = head;
 		
 		while(prev->next != nullptr) {
@@ -57,27 +57,33 @@ public:
 					end = prev;
 				}
 				delete current;
+				rw_lock.unlock();
 				return;
 			}
 			prev = current;
 		}
+		rw_lock.unlock();
 	}
 
 	bool find(T value)
 	{
+		rw_lock.lock_shared();
 		Node<T>* prev = head;
 		while(prev->next != nullptr) {
 			Node<T>* current = prev->next;
 			if(current->value == value) {
+				rw_lock.unlock_shared();
 				return true;
 			}
 			prev = current;
 		}
+		rw_lock.unlock_shared();
 		return false;
 	}
 
 	void print()
 	{
+		rw_lock.lock_shared();
 		Node<T>* prev = head;
 		while(prev->next != nullptr) {
 			Node<T>* current = prev->next;
@@ -85,9 +91,11 @@ public:
 			prev = current;
 		}
 		std::cout << std::endl;
+		rw_lock.unlock_shared();
 	}
 
 private:
 	Node<T>* head;
 	Node<T>* end;
+	std::shared_mutex rw_lock;
 };

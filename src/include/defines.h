@@ -3,7 +3,7 @@
 #include <cstdint>
 #define SEM_NAME "/semaphore"
 #define SHM_NAME "shared_mem"
-#define SHM_SIZE 4096
+#define SHM_SIZE 4096 
 
 using uint32 = uint32_t;
 using int32 = int32_t;
