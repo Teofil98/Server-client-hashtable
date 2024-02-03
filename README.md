@@ -37,6 +37,8 @@ The following assumptions have been made:
 * All messages have the same size, therefore `QUIT` and `PRINT` messages will have an empty payload.
 * The performance of the hashing function is beyond the scope of this project. The server uses a very simple hashing function that is not optimized to reduce collisions. However, custom hashing functions can easily be provided to the hashtable.
 
+NOTE: To simulate variable workloads per thread, each thread will spin a random number of times before executing the actual hashtable instruction. 
+
 ## Installation
 
 After cloning the repository, compile the code using the Makefile
