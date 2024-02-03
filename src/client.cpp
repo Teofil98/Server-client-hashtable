@@ -61,10 +61,10 @@ private:
 	int shm_size;
 	int shm_fd;
 	char* shm_ptr;
-	int shm_index;
 	const char* shm_name;
-	const char* sem_name;
 	sem_t* sem;
+	const char* sem_name;
+	int shm_index;
 
 	void write_int32_to_buff(int32 value)
 	{

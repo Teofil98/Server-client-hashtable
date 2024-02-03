@@ -9,6 +9,7 @@ template <typename T>
 class HashTable
 {
 public:
+
 	HashTable(const uint size, std::function<uint(T)> hash_function) 
 		: m_size{size}, m_hash_function{hash_function}
 	{
