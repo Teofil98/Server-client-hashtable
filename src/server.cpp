@@ -1,5 +1,7 @@
+#include <condition_variable>
 #include <cstdlib>
 #include <exception>
+#include <mutex>
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -86,7 +88,7 @@ public:
 				}
 
 				// If operation is not QUIT or PRINT, spawn a new thread
-				threads.emplace_back(&Server::execute_operation, this, operation, value);
+				spawn_thread(operation, value);
 			}
 
 			// Wait for threads to finish executing
@@ -112,6 +114,9 @@ private:
 	const int max_nb_threads;
 	std::vector<std::thread> threads;
 	int shm_index;
+	std::mutex thread_mtx;
+	std::condition_variable cv;
+	int thread_ready = false;
 
 	// Very simple hash function, not optimized to minimize collisions
 	static uint simple_hash(int32 value) {
@@ -121,7 +126,7 @@ private:
 	std::pair<OPERATION, int32> read_message() {
 		// check if we are at the end of the shared memory,
 		// if so, wrap around
-		if((shm_index + 8) > shm_size)
+		if((shm_index + MESSAGE_SIZE) > shm_size)
 			shm_index = 0;
 		// read the operation
 		int32 operation = read_int32_from_buff();
@@ -139,27 +144,90 @@ private:
 		return value.integer;
 	}
 
-	void execute_operation(OPERATION operation, int32 value) 
+	void execute_insert(int32 value) 
 	{
 		std::cout << "[Thread " << std::this_thread::get_id() << "] started" << std::endl;
+
+		{
+		std::unique_lock<std::mutex> lck(thread_mtx);	
+		hashtable.lock_bucket_for_write(value);
+		thread_ready = true;
+		cv.notify_all();
+		}
+		
+		rand_delay();
+		hashtable.insert(value);
+		hashtable.unlock_bucket_for_write(value);
+		std::cout << "[Thread " << std::this_thread::get_id() << "] finished" << std::endl;
+	}
+
+	void execute_delete(int32 value)
+	{
+		std::cout << "[Thread " << std::this_thread::get_id() << "] started" << std::endl;
+		{
+		std::unique_lock<std::mutex> lck(thread_mtx);	
+		hashtable.lock_bucket_for_write(value);
+		thread_ready = true;
+		cv.notify_all();
+		}
+
+		rand_delay();
+		hashtable.remove(value);
+		hashtable.unlock_bucket_for_write(value);
+		std::cout << "[Thread " << std::this_thread::get_id() << "] finished" << std::endl;
+	}
+
+	void execute_find(int32 value)
+	{
+		std::cout << "[Thread " << std::this_thread::get_id() << "] started" << std::endl;
+		{
+		std::unique_lock<std::mutex> lck(thread_mtx);	
+		hashtable.lock_bucket_for_read(value);
+		thread_ready = true;
+		cv.notify_all();
+		}
+
+		rand_delay();
+		bool result = hashtable.find(value);
+		hashtable.unlock_bucket_for_read(value);
+		if(result) std::cout << "Element: " << value << " found" << std::endl; 
+		else std::cout << "Element: " << value << " not found" << std::endl; 
+		std::cout << "[Thread " << std::this_thread::get_id() << "] finished" << std::endl;
+
+	}
+
+	void rand_delay() 
+	{
 		int n = 0;
 		int limit = rand();
 		while(n++ < limit) {}
-		switch (operation) {
+
+	}
+
+	void spawn_thread(OPERATION operation, int32 value) 
+	{
+			switch (operation) {
 			case OPERATION::INSERT: {
-				hashtable.insert(value);
+				threads.emplace_back(&Server::execute_insert, this, value);
 			} break;
 			case OPERATION::DELETE: {
-				hashtable.remove(value);
+				threads.emplace_back(&Server::execute_delete, this, value);
 			} break;
 			case OPERATION::FIND: {
-				bool result = hashtable.find(value);
-				if(result) std::cout << "Element: " << value << " found" << std::endl; 
-				else std::cout << "Element: " << value << " not found" << std::endl; 
+				threads.emplace_back(&Server::execute_find, this, value);
 			} break;
-					default: break; // should not be reached
+				default: break; // should not be reached
 			}	
-		std::cout << "[Thread " << std::this_thread::get_id() << "] finished" << std::endl;
+			// wait for thread to grab read/write lock before continuing
+			// this ensures that the order of enqueued operations from the client
+			// is the same
+			{
+				std::unique_lock<std::mutex> lck(thread_mtx);
+				while(!thread_ready) {
+					cv.wait(lck);
+				}
+				thread_ready = false;
+			}
 	}
 };
 

@@ -13,6 +13,8 @@ public:
 	Client(const char* mem_name, const int mem_size, const char* semaphore_name) 
 		: shm_size{mem_size}, shm_name{mem_name}, sem_name{semaphore_name}, shm_index{0}
 	{
+		// TODO: Check if size can accomodate one full message
+
 		// open shared memory
 		shm_fd = shm_open(shm_name, O_RDWR, 0666);
 		if(shm_fd == -1) {
@@ -25,6 +27,7 @@ public:
 		if(sem == SEM_FAILED) {
 			throw std::invalid_argument("ERROR: Could not open named semaphore");
 		}
+
 	}
 
 	~Client() 
@@ -40,7 +43,7 @@ public:
 	{
 		// if we are at the end of the memory, wait untill server has finished 
 		// processing all in flight requests, then start writing from the beginning of the memory
-		if((shm_index + 8) > shm_size) {
+		if((shm_index + MESSAGE_SIZE) > shm_size) {
 			int sem_value;
 			sem_getvalue(sem, &sem_value);
 			while(sem_value != 0) {
@@ -125,6 +128,7 @@ int main()
 	client.write_message(OPERATION::DELETE, -10);
 	client.write_message(OPERATION::INSERT, 4);
 	//sleep(1);
+	
 	client.write_message(OPERATION::PRINT, 0);
 	client.write_message(OPERATION::QUIT, 0);
 }
